@@ -1,0 +1,4 @@
+# Email Reviewer Dependencies
+
+# Optional: AI-powered categorization
+anthropic>=0.18.0
