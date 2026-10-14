@@ -1,4 +1,5 @@
 # Email Reviewer Dependencies
 
-# Optional: AI-powered categorization
-anthropic>=0.18.0
+# AI-powered categorization (Messages API + Message Batches, structured outputs).
+# Pinned below 1.x: the 1.x SDK is a breaking major (httpx2, removed aliases).
+anthropic>=0.86,<1
