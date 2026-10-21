@@ -23,3 +23,8 @@ Thumbs.db
 
 # Secrets file (use .secrets.example as template)
 .secrets
+
+# Per-mailbox secrets for extra profiles (see src/config.py)
+.secrets.*
+!.secrets.example
+!.secrets.gmail.example

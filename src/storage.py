@@ -67,7 +67,7 @@ def export_summary(decisions: Dict[str, str]) -> str:
     useful = [k for k, v in decisions.items() if v == "useful"]
     useless = [k for k, v in decisions.items() if v == "not_useful"]
 
-    filename = f"data/summary_{datetime.now().strftime('%Y%m%d_%H%M%S')}.txt"
+    filename = os.path.join(DATA_DIR, f"summary_{datetime.now().strftime('%Y%m%d_%H%M%S')}.txt")
 
     with open(filename, "w") as f:
         f.write(f"EMAIL REVIEW SUMMARY — {datetime.now().strftime('%Y-%m-%d %H:%M')}\n")

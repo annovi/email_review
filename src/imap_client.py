@@ -228,9 +228,34 @@ class IMAPClient:
         except IMAPRefused:
             return 0
 
+    def folder_with_flag(self, flag: str) -> Optional[str]:
+        """Folder carrying a LIST special-use flag such as \\Trash, \\All, \\Sent, \\Junk
+        (RFC 6154; Gmail and iCloud both send them), or None."""
+        def do():
+            status, data = self.mail.list()
+            if status != "OK":
+                raise IMAPRefused(f"LIST: {status} {_text(data)}")
+            return data
+        want = flag.upper()
+        for item in self._retry("LIST", do):
+            line = item.decode(errors="replace") if isinstance(item, bytes) else (
+                item[0].decode(errors="replace") + ' ' + item[1].decode(errors="replace") if isinstance(item, tuple) else str(item))
+            m = _LIST_RE.match(line)
+            if not m or want not in m.group("flags").upper().split():
+                continue
+            name = m.group("name").strip()
+            if len(name) >= 2 and name[0] == '"' and name[-1] == '"':
+                name = name[1:-1].replace('\\"', '"').replace("\\\\", "\\")
+            return name
+        return None
+
     def detect_trash_folder(self, preferred: Optional[str] = None) -> str:
-        """Find the trash/deleted folder name for this server."""
+        """Find the trash/deleted folder name for this server: the \\Trash special-use folder
+        if the server marks one, else the preferred/known names."""
         folders = self.list_folders()
+        flagged = self.folder_with_flag("\\Trash")
+        if flagged and flagged in folders:
+            return flagged
         candidates = [preferred] if preferred else []
         candidates += ["Deleted Messages", "Trash", "[Gmail]/Trash",
                        "INBOX.Trash", "Deleted Items"]

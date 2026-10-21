@@ -6,6 +6,10 @@ Clean a very large mailbox one SENDER at a time: scan every header once,
 group by sender, let Claude judge each sender against a keep policy, review
 the plan, then move the flagged senders' mail to Trash in bulk.
 
+Mailbox profiles (see src/config.py): add `--profile gmail` to any command to work on the
+mailbox described in .secrets.gmail, with its own data/gmail/ directory. Without it the
+iCloud mailbox in .secrets is used, as before. $EMAIL_PROFILE does the same.
+
 Interactive:
     python main.py                      # menu (option 3 is the sender workflow)
     python main.py --stats              # folder statistics
@@ -29,6 +33,7 @@ Headless pipeline (each step is resumable; run one at a time):
                                         # execute a plan; N must equal its total_emails
 """
 
+import os
 import sys
 import time
 import math
@@ -40,6 +45,7 @@ from typing import Optional, List, Tuple
 from src.config import (
     EMAIL_ADDRESS, APP_PASSWORD, BATCH_SIZE, AI_MIN_SENDER_COUNT,
     SKIP_FOLDERS, CATEGORIES, TRASH_FOLDER, HARD_DELETE_ALLOWED_FOLDERS,
+    SCAN_FOLDERS, PROFILE, PROVIDER, DATA_DIR, SECRETS_FILE, PASSWORD_HELP, IMAP_HOST,
 )
 from src.imap_client import (
     IMAPClient, IMAPUnavailable, decode_header, get_body_text, format_date,
@@ -83,8 +89,9 @@ class EmailReviewer:
             return True
         except ConnectionError as e:
             print(f"\n  ❌ {e}")
-            print("  → You must use an App-Specific Password, not your regular Apple ID password.")
-            print("  → https://appleid.apple.com → Sign-In & Security → App-Specific Passwords")
+            print(f"  → Profile '{PROFILE}' ({PROVIDER}, {IMAP_HOST}), credentials from {SECRETS_FILE}.")
+            print("  → Use an app password, not the account password:")
+            print(f"  → {PASSWORD_HELP}")
             return False
 
     def disconnect(self):
@@ -385,7 +392,23 @@ class EmailReviewer:
     # ── Sender index: scan / persist ─────────────────────────────────────────
 
     def _reviewable_folders(self) -> list:
-        """Folders eligible for scanning (excluding Drafts/Trash/etc)."""
+        """Folders eligible for scanning: SCAN_FOLDERS when the profile names them (Gmail: the
+        All Mail label, found by its \\All flag if the account is localised), else every folder
+        not in SKIP_FOLDERS."""
+        if SCAN_FOLDERS:
+            chosen = []
+            for f in SCAN_FOLDERS:
+                if f in self.folders:
+                    chosen.append(f)
+                elif f == "[Gmail]/All Mail":
+                    real = self.client.folder_with_flag("\\All")
+                    if real:
+                        chosen.append(real)
+                    else:
+                        print(f"  ⚠️  {f} not found on the server (and no folder flagged \\All)")
+                else:
+                    print(f"  ⚠️  {f} not found on the server; folders: {', '.join(self.folders[:12])}")
+            return chosen
         return [f for f in self.folders if f not in SKIP_FOLDERS]
 
     @staticmethod
@@ -718,7 +741,7 @@ class EmailReviewer:
         divider("═")
         return result
 
-    PRESERVE_STATE_FILE = "data/preserve_state.json"
+    PRESERVE_STATE_FILE = os.path.join(DATA_DIR, "preserve_state.json")
 
     def preserve_keepers(self, index: Optional[SenderIndex], dest: str, dry_run: bool,
                          new_only: bool = False) -> None:
@@ -1130,7 +1153,7 @@ class EmailReviewer:
 
         plans = list_plans()
         if not plans:
-            print("  No saved plans found in data/.")
+            print(f"  No saved plans found in {DATA_DIR}/.")
             input("  Press Enter…")
             return
 
